@@ -30,10 +30,10 @@
   .\Setup_EnrolintoWS1.ps1 -username USERNAME -password PASSWORD -Server DESTINATION_SERVER_URL -OGName DESTINATION_OG_NAME -Download
 #>
 param (
-    [Parameter(Mandatory=$false)][string]$script:username=$Username,
-    [Parameter(Mandatory=$false)][string]$script:password=$password,
-    [Parameter(Mandatory=$false)][string]$script:OGName=$OGName,
-    [Parameter(Mandatory=$false)][string]$script:Server=$Server,
+    [Parameter(Mandatory=$false)][string]$username,
+    [Parameter(Mandatory=$false)][string]$password,
+    [Parameter(Mandatory=$false)][string]$OGName,
+    [Parameter(Mandatory=$false)][string]$Server,
     [switch]$Download
 )
 
@@ -91,8 +91,9 @@ function Invoke-CreateTask{
   $TaskName = "$AWSenrolintoWS1script"
   Try{
       $A = New-ScheduledTaskAction -Execute "C:\Windows\System32\WindowsPowerShell\v1.0\Powershell.exe" -Argument $arg 
-      $T = New-ScheduledTaskTrigger -AtLogOn
+      $T = New-ScheduledTaskTrigger -AtLogOn -RandomDelay 60
       $P = New-ScheduledTaskPrincipal "System" -RunLevel Highest
+      #$P = New-ScheduledTaskPrincipal -UserID "NT AUTHORITY\System" -LogonType ServiceAccount -RunLevel Highest
       $S = New-ScheduledTaskSettingsSet -Hidden -AllowStartIfOnBatteries -StartWhenAvailable -Priority 5
       $S.CimInstanceProperties['MultipleInstances'].Value=3
       $D = New-ScheduledTask -Action $A -Principal $P -Trigger $T -Settings $S
@@ -123,7 +124,7 @@ $scriptBaseName = (Get-Item $scriptName).Basename
 $logLocation = "$current_path"+"$delimiter"+"$scriptBaseName"+"_$DateNow.log"
 
 $destfolder = "$env:WINDIR\Setup\Scripts";
-$file = "AirwatchAgent.msi";
+$agent = "AirwatchAgent.msi";
 $AWSenrolintoWS1script = "EnrolintoWS1.ps1"
 $deploypathscriptName = "$destfolder"+"$delimiter"+"$AWSenrolintoWS1script"
 
@@ -139,12 +140,17 @@ function Main {
   
   #Ask for WS1 tenant and staging credentials if not already provided
   if ([string]::IsNullOrEmpty($script:Server)){
-      $script:Username = Read-Host -Prompt 'Enter the Staging Username'
-      $script:password = Read-Host -Prompt 'Enter the Staging User Password'
-      $script:Server = Read-Host -Prompt 'Enter the Workspace ONE UEM Device Services Server URL'
-      $script:OGName = Read-Host -Prompt 'Enter the Organizational Group Name'
+      $Username = Read-Host -Prompt 'Enter the Staging Username'
+      $password = Read-Host -Prompt 'Enter the Staging User Password'
+      $Server = Read-Host -Prompt 'Enter the Workspace ONE UEM Device Services Server URL'
+      $OGName = Read-Host -Prompt 'Enter the Organizational Group Name'
   }
   Write-Log2 -Path "$logLocation" -Message "Workspace ONE environment details obtained" -Level Info
+  
+  #Test for blank passord as...
+  if ([string]::IsNullOrEmpty($password)){
+      $password = "."
+  }
 
   #Create EnrolintoWS1.ps1 Script that does enrolment
   $EnrolintoWS1 = @'
@@ -177,10 +183,10 @@ function Main {
     .\EnrolintoWS1.ps1 -username USERNAME -password PASSWORD -Server DESTINATION_SERVER_URL -OGName DESTINATION_OG_NAME
   #>
   param (
-    [Parameter(Mandatory=$true)][string]$username=$script:username,
-    [Parameter(Mandatory=$true)][string]$password=$script:password,
-    [Parameter(Mandatory=$true)][string]$OGName=$script:OGName,
-    [Parameter(Mandatory=$true)][string]$Server=$script:Server
+    [Parameter(Mandatory=$true)][string]$username,
+    [Parameter(Mandatory=$true)][string]$password,
+    [Parameter(Mandatory=$true)][string]$OGName,
+    [Parameter(Mandatory=$true)][string]$Server
   )
   
   function Write-Log2{
@@ -240,9 +246,9 @@ function Main {
       Start-Sleep -Seconds 10
   }
   #Copy AirwatchAgent.msi to %WINDIR%\Setup\Scripts
-  $airwatchagent = Get-ChildItem -Path $current_path -Include $file -Recurse -ErrorAction SilentlyContinue
+  $airwatchagent = Get-ChildItem -Path $current_path -Include $agent -Recurse -ErrorAction SilentlyContinue
   if($airwatchagent){
-      Copy-Item -Path $airwatchagent -Destination "$destfolder"+"$delimiter"+"$file" -Force
+      Copy-Item -Path $airwatchagent -Destination "$destfolder$delimiter$agent" -Force
       Write-Log2 -Path "$logLocation" -Message "copy AirwatchAgent.msi to $destfolder" -Level Info
   }
 
