@@ -10,12 +10,12 @@
 .DESCRIPTION
     Creates script, downloads AirwatchAgent.msi and creates a Scheduled Task to enrol an AWS Workspaces Desktop into Workspace ONE.
     Specifically:
-    * Creates %WINDIR%\Setup\Scripts\EnrolintoWS1.ps1 calls EnrolintoWS1.ps1 
+    * Creates %WINDIR%\Setup\Scripts\EnrolintoWS1.ps1
     * Creates Windows Scheduled Task to run EnrolintoWS1.ps1 passing Workspace ONE environment and staging user credentials as parameters.
     * Downloads the latest AirWatchAgent.msi to %WINDIR%\Setup\Scripts folder if -Download switch is utilised
     AirwatchAgent.msi can also be downloaded manually from https://getwsone.com or to utilise the same version seeded into the console goto
     https://<DS_FQDN>/agents/ProtectionAgent_AutoSeed/AirwatchAgent.msi to download it, substituting <DS_FQDN> with the FQDN for the Device Services Server.
-​
+â€‹
     THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
     IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
     FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
@@ -85,8 +85,8 @@ function Invoke-DownloadAirwatchAgent {
 
 function Invoke-GetTask{
     #Look for task and delete if already exists
-    if(Get-ScheduledTask -TaskName $scriptBaseName -ErrorAction SilentlyContinue){
-        Unregister-ScheduledTask -InputObject $task -Confirm:$false
+    if(Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue){
+        Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
     }
 }
 
@@ -110,7 +110,6 @@ function Invoke-CreateTask{
     }
 }
 
-
 function Build-EnrolScript {
     #Create EnrolintoWS1.ps1 Script that does enrolment
     $EnrolintoWS1 = @'
@@ -123,14 +122,14 @@ function Build-EnrolScript {
         Created by:	    Phil Helmling, @philhelmling
         Organization:   VMware, Inc.
         Filename:       EnrolintoWS1.ps1
-        GitHub:         
+        GitHub:         https://github.com/helmlingp/AWS_WS1Enrolment
     .DESCRIPTION
         **This script does not need to be edited**
+        %WINDIR%\Setup\Scripts\EnrolintoWS1.ps1 called by a Windows Scheduled Task on logon
         Seeded into Base AMI VM used to create AWS Workspace
-        Called by a Windows Scheduled Task
         Enrols a AWS Workspaces Desktop into WS1
         Scheduled Task provides parameters for enrolment 
-        Requires AirWatchAgent.msi in the C:\Recovery\OEM folder
+        Requires AirWatchAgent.msi in the %WINDIR%\Setup\Scripts folder
 
         THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
         IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
@@ -216,8 +215,6 @@ function Main {
         }
         "Successfully created directory '$deploypath'."
     }
-    #Test-Folder -Path $destfolder
-    #Write-Log2 -Path "$logLocation" -Message "Setup_AWSEnrolintoWS1.ps1 Started" -Level Success
 
     #Ask for WS1 tenant and staging credentials if not already provided
     if ([string]::IsNullOrEmpty($script:Server)){
@@ -234,9 +231,9 @@ function Main {
     }
 
     $EnrolintoWS1Script = Build-EnrolScript
-    $FileName = "$destfolder\$AWSenrolintoWS1script"
-    If (Test-Path -Path $FileName){Remove-Item $FileName -force;Write-Log2 -Path "$logLocation" -Message "removed existing $AWSenrolintoWS1script" -Level Warn}
-    New-Item -Path $destfolder -ItemType "file" -Name $AWSenrolintoWS1script -Value $EnrolintoWS1 -Force -Confirm:$false
+    $deploypathscriptName = "$destfolder\$AWSenrolintoWS1script"
+    If (Test-Path -Path $deploypathscriptName){Remove-Item $deploypathscriptName -force;Write-Log2 -Path "$logLocation" -Message "removed existing $AWSenrolintoWS1script" -Level Warn}
+    New-Item -Path $destfolder -ItemType "file" -Name $AWSenrolintoWS1script -Value $EnrolintoWS1Script -Force -Confirm:$false
     Write-Log2 -Path "$logLocation" -Message "created new $AWSenrolintoWS1script" -Level Info
 
     #Download latest AirwatchAgent.msi
@@ -244,7 +241,7 @@ function Main {
         #Download AirwatchAgent.msi if -Download switch used, otherwise requires AirwatchAgent.msi to be deployed in the ZIP.
         Invoke-DownloadAirwatchAgent
         Start-Sleep -Seconds 10
-        if(Test-Path -Path "$agentpath\$agent" -PathType Leaf){
+        if(!(Test-Path -Path "$agentpath\$agent" -PathType Leaf)){
             Copy-Item -Path "$current_path\$agent" -Destination "$agentpath\$agent" -Force
             Write-Log2 -Path "$logLocation" -Message "Copied $agent to $agentpath" -Level Info
         } else {
@@ -283,12 +280,12 @@ $DateNow = Get-Date -Format "yyyyMMdd_hhmm"
 $scriptName = $MyInvocation.MyCommand.Name
 $scriptBaseName = (Get-Item $scriptName).Basename
 $logLocation = "$current_path"+"$delimiter"+"$scriptBaseName"+"_$DateNow.log"
-$TaskName = $AWSenrolintoWS1script
 
 $destfolder = "$env:WINDIR\Setup\Scripts";
 $agent = "AirwatchAgent.msi";
 $AWSenrolintoWS1script = "EnrolintoWS1.ps1"
 $deploypathscriptName = "$destfolder\$AWSenrolintoWS1script"
+$TaskName = "EnrolintoWS1"
 
 #$Hostname=[System.Net.Dns]::GetHostName()
 
