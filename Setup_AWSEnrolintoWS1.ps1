@@ -8,14 +8,18 @@
     Filename:       Setup_AWSEnrolintoWS1.ps1
     GitHub:         https://github.com/helmlingp/AWS_WS1Enrolment
 .DESCRIPTION
-    Creates script, downloads AirwatchAgent.msi and creates a Scheduled Task to enrol an AWS Workspaces Desktop into Workspace ONE.
+    Creates script, downloads AirwatchAgent.msi and called by %WINDIR%\Setup\Scripts\SetupComplete.cmd on first logon
     Specifically:
     * Creates %WINDIR%\Setup\Scripts\EnrolintoWS1.ps1
-    * Creates Windows Scheduled Task to run EnrolintoWS1.ps1 passing Workspace ONE environment and staging user credentials as parameters.
+    * Creates %WINDIR%\Setup\Scripts\SetupComplete.cmd
     * Downloads the latest AirWatchAgent.msi to %WINDIR%\Setup\Scripts folder if -Download switch is utilised
     AirwatchAgent.msi can also be downloaded manually from https://getwsone.com or to utilise the same version seeded into the console goto
     https://<DS_FQDN>/agents/ProtectionAgent_AutoSeed/AirwatchAgent.msi to download it, substituting <DS_FQDN> with the FQDN for the Device Services Server.
-â€‹
+    
+    SetupComplete.cmd runs on first user logon after OOBE and calls EnrolintoWS1.ps1 passing Workspace ONE environment and staging user credentials as parameters.
+    Seeded into Base AMI VM used to create AWS Workspace
+    Enrols a AWS Workspaces Desktop into WS1
+
     THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
     IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
     FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
@@ -83,33 +87,6 @@ function Invoke-DownloadAirwatchAgent {
     }
 }
 
-function Invoke-GetTask{
-    #Look for task and delete if already exists
-    if(Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue){
-        Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
-    }
-}
-
-function Invoke-CreateTask{
-    #Get Current time to set Scheduled Task to run powershell
-    $DateTime = (Get-Date).AddMinutes(5).ToString("HH:mm")
-    $arg = "-ep Bypass -File $deploypathscriptName -username $username -password $password -Server $Server -OGName $OGName"
-
-    Try{
-        $A = New-ScheduledTaskAction -Execute "C:\Windows\System32\WindowsPowerShell\v1.0\Powershell.exe" -Argument $arg 
-        $T = New-ScheduledTaskTrigger -AtLogOn -RandomDelay "00:05"
-        $P = New-ScheduledTaskPrincipal "System" -RunLevel Highest
-        $S = New-ScheduledTaskSettingsSet -Hidden -AllowStartIfOnBatteries -StartWhenAvailable -Priority 5
-        $S.CimInstanceProperties['MultipleInstances'].Value=3
-        $D = New-ScheduledTask -Action $A -Principal $P -Trigger $T -Settings $S
-
-        Register-ScheduledTask -InputObject $D -TaskName $TaskName -Force -ErrorAction Stop
-        Write-Log2 -Path "$logLocation" -Message "Create Task $Taskname" -Level Info
-    } Catch {
-        Write-Log2 -Path "$logLocation" -Message "Error: Job creation failed.  Validate user rights." -Level Info
-    }
-}
-
 function Build-EnrolScript {
     #Create EnrolintoWS1.ps1 Script that does enrolment
     $EnrolintoWS1 = @'
@@ -125,10 +102,9 @@ function Build-EnrolScript {
         GitHub:         https://github.com/helmlingp/AWS_WS1Enrolment
     .DESCRIPTION
         **This script does not need to be edited**
-        %WINDIR%\Setup\Scripts\EnrolintoWS1.ps1 called by a Windows Scheduled Task on logon
+        %WINDIR%\Setup\Scripts\EnrolintoWS1.ps1 called by %WINDIR%\Setup\Scripts\SetupComplete.cmd on first logon
         Seeded into Base AMI VM used to create AWS Workspace
         Enrols a AWS Workspaces Desktop into WS1
-        Scheduled Task provides parameters for enrolment 
         Requires AirWatchAgent.msi in the %WINDIR%\Setup\Scripts folder
 
         THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
@@ -202,6 +178,20 @@ function Build-EnrolScript {
     return $EnrolintoWS1
 }
 
+function Build-SetupComplete {
+    #SetupComplete that runs automatically by Windows after machine is SYSPREP'd and first user logon
+    $SetupComplete = @"
+    echo Off
+    rem Use this batch file to call a script to enrol a Windows Desktop into Workspace ONE UEM
+    rem Replace USERNAME, PASSWORD, DESTINATION_SERVER_URL, DESTINATION_OG_NAME parameters
+    rem November 2021
+
+    set LOCALAPPDATA=%USERPROFILE%\AppData\Local
+    powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -NoProfile -File "%~dp0EnrolintoWS1.ps1" -username $script:username -password $script:password -Server $script:Server -OGName $script:OGName -Hostname $script:hostname
+"@
+    return $SetupComplete
+}
+
 function Main {
     #Setup Logging
     Write-Log2 -Path "$logLocation" -Message "==============Start Setup_EnrolintoWS1==============" -Level Success
@@ -230,22 +220,28 @@ function Main {
         $password = "."
     }
 
-    $EnrolintoWS1Script = Build-EnrolScript
-    $deploypathscriptName = "$destfolder\$AWSenrolintoWS1script"
-    If (Test-Path -Path $deploypathscriptName){Remove-Item $deploypathscriptName -force;Write-Log2 -Path "$logLocation" -Message "removed existing $AWSenrolintoWS1script" -Level Warn}
-    New-Item -Path $destfolder -ItemType "file" -Name $AWSenrolintoWS1script -Value $EnrolintoWS1Script -Force -Confirm:$false
-    Write-Log2 -Path "$logLocation" -Message "created new $AWSenrolintoWS1script" -Level Info
+    #Create SetupComplete.cmd and EnrolintoWS1.ps1 Scripts
+    $FileName = "$destfolder\EnrolintoWS1.ps1"
+    $EnrolintoWS1 = Build-EnrolScript
+    If (Test-Path -Path $FileName){Remove-Item $FileName -force;Write-Log2 -Path "$logLocation" -Message "removed existing EnrolintoWS1.ps1" -Level Warn}
+    New-Item -Path $destfolder -ItemType "file" -Name "EnrolintoWS1.ps1" -Value $EnrolintoWS1 -Force -Confirm:$false
+    Write-Log2 -Path "$logLocation" -Message "create new EnrolintoWS1.ps1" -Level Info
+    $FileName = "$destfolder\SetupComplete.cmd"
+    $SetupComplete = Build-SetupComplete
+    If (Test-Path -Path $FileName){Remove-Item $FileName -force;Write-Log2 -Path "$logLocation" -Message "removed existing SetupComplete.cmd" -Level Warn}
+    New-Item -Path $destfolder -ItemType "file" -Name "SetupComplete.cmd" -Value $SetupComplete -Force -Confirm:$false
+    Write-Log2 -Path "$logLocation" -Message "create new SetupComplete.cmd" -Level Info
 
     #Download latest AirwatchAgent.msi
     if($Download){
         #Download AirwatchAgent.msi if -Download switch used, otherwise requires AirwatchAgent.msi to be deployed in the ZIP.
         Invoke-DownloadAirwatchAgent
         Start-Sleep -Seconds 10
-        if(!(Test-Path -Path "$agentpath\$agent" -PathType Leaf)){
+        if(Test-Path -Path "$agentpath\$agent" -PathType Leaf){
             Copy-Item -Path "$current_path\$agent" -Destination "$agentpath\$agent" -Force
             Write-Log2 -Path "$logLocation" -Message "Copied $agent to $agentpath" -Level Info
         } else {
-            Write-Log2 -Path "$logLocation" -Message "Agent not available to copy to $agentpath" -Level Info
+            Write-Log2 -Path "$logLocation" -Message "Agent not available to copy to $destfolder" -Level Info
         }
     } else {
         #Copy AirwatchAgent.msi to %WINDIR%\Setup\Scripts
@@ -254,13 +250,10 @@ function Main {
             Copy-Item -Path $airwatchagent -Destination "$destfolder\$agent" -Force
             Write-Log2 -Path "$logLocation" -Message "copy $agent to $destfolder" -Level Info
         } else {
-            Write-Log2 -Path "$logLocation" -Message "Agent not available to copy to $agentpath" -Level Error
+            Write-Log2 -Path "$logLocation" -Message "Agent not available to copy to $destfolder" -Level Error
         }
     }
 
-    #Create Scheduled Task upon first logon in SYSTEM context
-    Invoke-GetTask
-    Invoke-CreateTask
     Write-Log2 -Path "$logLocation" -Message "Created Task set to run approx 5 minutes after next logon" -Level Info
     Write-Log2 -Path "$logLocation" -Message "==============Completed Setup_EnrolintoWS1==============" -Level Success
 }
@@ -285,9 +278,8 @@ $destfolder = "$env:WINDIR\Setup\Scripts";
 $agent = "AirwatchAgent.msi";
 $AWSenrolintoWS1script = "EnrolintoWS1.ps1"
 $deploypathscriptName = "$destfolder\$AWSenrolintoWS1script"
-$TaskName = "EnrolintoWS1"
 
-#$Hostname=[System.Net.Dns]::GetHostName()
+$Hostname=[System.Net.Dns]::GetHostName()
 
 if($Debug){
   write-host "Current Path: $current_path"
