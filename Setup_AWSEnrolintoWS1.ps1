@@ -133,7 +133,6 @@ function Build-EnrolScript {
         [Alias('LogPath')][Alias('LogLocation')][string]$Path=$Local:Path,
         [Parameter(Mandatory=$false)][ValidateSet("Success","Error","Warn","Info")][string]$Level="Info"
     )
-
         $ColorMap = @{"Success"="Green";"Error"="Red";"Warn"="Yellow"};
         $FontColor = "White";
         If($ColorMap.ContainsKey($Level)){$FontColor = $ColorMap[$Level];}
@@ -167,9 +166,6 @@ function Build-EnrolScript {
         start-sleep 60;
         Write-Log2 -Path "$logLocation" -Message "Workspace ONE enrollment complete" -Level Success
         $enrollmentcomplete = $true;
-        #Remove Task so it doesn't run again
-        Unregister-ScheduledTask -TaskName "EnrolintoWS1.ps1" -confirm:$false -ErrorAction SilentlyContinue
-    }
     } else {
         Write-Log2 -Path "$logLocation" -Message "This is the Orginal Workspace, Enrolling terminated" -Level Info
     }
