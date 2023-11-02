@@ -16,9 +16,9 @@ The Setup_EnrolintoWS1.ps1 script should be run on the Base AWS AMI VM when used
     CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 # Usage
-Open a Administrator: Powershell Console
-run `Set-ExecutionPolicy bypass` to allow the script to run
-Download the Setup_EnrolintoWS1.ps1 from this repository and from within the powershell console change to that directory
-run `.\Setup_EnrolintoWS1.ps1 -username USERNAME -password PASSWORD -Server DESTINATION_SERVER_URL -OGName DESTINATION_OG_NAME -Download`
+- Open a Administrator: Powershell Console
+- run `Set-ExecutionPolicy bypass` to allow the script to run
+- Download the Setup_EnrolintoWS1.ps1 from this repository and from within the powershell console change to that directory
+- run `.\Setup_EnrolintoWS1.ps1 -username USERNAME -password PASSWORD -Server DESTINATION_SERVER_URL -OGName DESTINATION_OG_NAME -Download`
 
 If wanting to use a specific version of Workspace ONE Intelligent Hub (AirwatchAgent.msi), place the AirwatchAgent.msi in the same folder as the Setup_EnrolintoWS1.ps1 script.
