@@ -123,7 +123,7 @@ function Invoke-DownloadAirwatchAgent {
 
 function Invoke-CreateTask{
     #$hostname=hostname
-    $arg = "-ep Bypass -File $EnrolintoWS1 -username $username -password $password -Server $Server -OGName $OGName -Hostname $Hostname"
+    $arg = "-ep Bypass -File $FileName -username $username -password $password -Server $Server -OGName $OGName -Hostname $Hostname"
     
     $TaskName = "EnrolintoWS1.ps1"
     Try{
