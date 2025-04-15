@@ -72,7 +72,7 @@ param (
     [Parameter(Mandatory=$true,ValueFromPipeline=$true,HelpMessage="GroupID")] [Alias('OG')] [Alias('OGName')] [String] $GroupID="GroupID",
     [Parameter(Mandatory=$true,ValueFromPipeline=$true,HelpMessage="Staging User Name")] [String] $UserName="staginguser",
     [Parameter(Mandatory=$true,ValueFromPipeline=$true,HelpMessage="Staging User Password")] [String] $Password="stagingpassword",
-    [Parameter(Mandatory=$false,ValueFromPipeline=$true,HelpMessage="LogPath")] [String] $LogPath="$env:ProgramData\AirWatch\UnifiedAgent\Logs",
+    [Parameter(Mandatory=$false,ValueFromPipeline=$true,HelpMessage="LogPath")] [Alias('LogLocation')] [String] $LogPath="$env:ProgramData\AirWatch\UnifiedAgent\Logs",
     [switch]$Download
 )
 
@@ -180,7 +180,7 @@ function Invoke-DownloadAirwatchAgent {
 
 function Invoke-CreateTask{
     #$hostname=hostname
-    $arg = "-ep Bypass -File $FileName -Server $ServerName -GroupID $GroupID -UserName $Username -Password $Password -Hostname $Hostname"
+    $arg = "-ep Bypass -File $FileName -ServerName $ServerName -GroupID $GroupID -UserName $Username -Password $Password -Hostname $Hostname"
     
     $TaskName = "EnrolintoWS1.ps1"
     Try{
@@ -227,12 +227,12 @@ function Build-EnrollScript {
 .\EnrollintoWS1.ps1 -Server DESTINATION_SERVER_URL GroupID DESTINATION_OG_NAME -Username USERNAME -Password PASSWORD  -Hostname SetupHostname
 #>
 param (
-    [Parameter(Mandatory=$true,ValueFromPipeline=$true,HelpMessage="Server Name")] [String] $ServerName="cn135.awmdm.com",
-    [Parameter(Mandatory=$true,ValueFromPipeline=$true,HelpMessage="GroupID")] [String] $GroupID="GroupID",
+    [Parameter(Mandatory=$true,ValueFromPipeline=$true,HelpMessage="Server Name")] [Alias('Server')] [String] $ServerName="cn135.awmdm.com",
+    [Parameter(Mandatory=$true,ValueFromPipeline=$true,HelpMessage="GroupID")] [Alias('OG')] [Alias('OGName')] [String] $GroupID="GroupID",
     [Parameter(Mandatory=$true,ValueFromPipeline=$true,HelpMessage="Staging User Name")] [String] $UserName="staginguser",
     [Parameter(Mandatory=$true,ValueFromPipeline=$true,HelpMessage="Staging User Password")] [String] $Password="stagingpassword",
     [Parameter(Mandatory=$true,ValueFromPipeline=$true,HelpMessage="Hostname of Setup Machine")] [string] $Hostname,
-    [Parameter(Mandatory=$false,ValueFromPipeline=$true,HelpMessage="LogPath")] [String] $LogPath="$env:ProgramData\AirWatch\UnifiedAgent\Logs"
+    [Parameter(Mandatory=$false,ValueFromPipeline=$true,HelpMessage="LogPath")] [Alias('LogLocation')] [String] $LogPath="$env:ProgramData\AirWatch\UnifiedAgent\Logs"
 )
 
 function Write-Log {
