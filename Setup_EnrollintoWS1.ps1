@@ -6,7 +6,7 @@
     to enrol a Persistent VDI Desktop into Workspace ONE.
  .NOTES
     Created:   	    October 2022
-    Updated:        April 2025
+    Updated:        June 2025
     Created by:	    Phil Helmling
     Organization:   Omnissa, LLC
     Filename:       Setup_EnrolintoWS1.ps1
@@ -19,6 +19,8 @@
 
     The Setup_EnrolintoWS1.ps1 script should be run on the Base AWS AMI VM when used to create AWS Workspace VMs, or within the 
     Azure Base Image when used to create Horizon Cloud on Azure pools.
+
+    Requires Intelligent Hub for Windows 2505 or above as this uses the new DEFERENROLLMENT=Y parameter.
 
     ** Note: **
     - Silent enrolment requires AAD P1 license and "Airwatch by VMware" MDM app configured for AAD joined machines or ADDS 
@@ -68,7 +70,7 @@ OPTIONAL: Specify if wanting to download the latest version of AirwatchAgent.msi
   .\Setup_EnrolintoWS1.ps1 -Server DESTINATION_SERVER_URL -OGName DESTINATION_OG_NAME -Username USERNAME -Password PASSWORD -Download
 #>
 param (
-    [Parameter(Mandatory=$true,ValueFromPipeline=$true,HelpMessage="Server Name")] [Alias('Server')] [String] $ServerName="cn135.awmdm.com",
+    [Parameter(Mandatory=$true,ValueFromPipeline=$true,HelpMessage="Server Name")] [Alias('Server')] [String] $ServerName="ds135.awmdm.com",
     [Parameter(Mandatory=$true,ValueFromPipeline=$true,HelpMessage="GroupID")] [Alias('OG')] [Alias('OGName')] [String] $GroupID="GroupID",
     [Parameter(Mandatory=$true,ValueFromPipeline=$true,HelpMessage="Staging User Name")] [String] $UserName="staginguser",
     [Parameter(Mandatory=$true,ValueFromPipeline=$true,HelpMessage="Staging User Password")] [String] $Password="stagingpassword",
@@ -375,7 +377,7 @@ function Invoke-InstallAgent {
 
     try {
         Write-Log "Installing AirwatchAgent" -Level Info
-        $process = Start-Process msiexec.exe -ArgumentList "/i","$destfolder\$agent","/quiet","UI=Headless","PROVISIONHUB=Y","ENABLEBETAFEATURES=Y" -NoNewWindow -Wait -PassThru
+        $process = Start-Process msiexec.exe -ArgumentList "/i","$destfolder\$agent","/quiet","UI=HEADLESS","PROVISIONHUB=Y","ENABLEBETAFEATURES=Y","DEFERENROLLMENT=Y" -NoNewWindow -Wait -PassThru
         
         if ($process.ExitCode -eq 0) {
             Write-Log "Hub Install Completed." -Level Success
