@@ -118,7 +118,7 @@ function Write-Log {
                 $LogPath = Get-Location
             }
         }
-		write-host "LogPath: $LogPath"
+		#write-host "LogPath: $LogPath"
 		if($null -eq $IsWindows){
 			if($env:OS -eq "Windows_NT"){
 				$delimiter = "\"
@@ -401,18 +401,18 @@ function Main {
     Write-Log "Setup_EnrolintoWS1.ps1 Started" -Level Success
 
     #Ask for WS1 tenant and staging credentials if not already provided
-    if ([string]::IsNullOrEmpty($script:Server)){
+    <# if ([string]::IsNullOrEmpty($ServerName)){
         $ServerName = Read-Host -Prompt 'Enter the Workspace ONE UEM Device Services Server URL'
         $GroupID = Read-Host -Prompt 'Enter the Organizational Group ID'
         $UserName = Read-Host -Prompt 'Enter the Staging Username'
         $Password = Read-Host -Prompt 'Enter the Staging User Password'
-    }
-    Write-Log "Workspace ONE environment details obtained" -Level Info
+    } #>
+<#     Write-Log "Workspace ONE environment details obtained" -Level Info
 
     #Test for blank passord as...
-    if ([string]::IsNullOrEmpty($password)){
+    if ([string]::IsNullOrEmpty($Password)){
         $password = "."
-    }
+    } #>
 
     #Create EnrolintoWS1.ps1 Script that does enrolment, triggered on first logon by Scheduled Task called EnrolintoWS1.ps1
     $FileName = "$destfolder\EnrollintoWS1.ps1"
