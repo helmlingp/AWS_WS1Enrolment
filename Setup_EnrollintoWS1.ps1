@@ -183,10 +183,10 @@ function Invoke-DownloadAirwatchAgent {
 function Invoke-CreateTask{
     #$hostname=hostname
     $arg = "-ep Bypass -File $FileName -ServerName $ServerName -GroupID $GroupID -UserName $Username -Password $Password -Hostname $Hostname"
-    
+    $cmd = "C:\Windows\System32\WindowsPowerShell\v1.0\Powershell.exe"
     $TaskName = "EnrolintoWS1.ps1"
     Try{
-        $A = New-ScheduledTaskAction -Execute "C:\Windows\System32\WindowsPowerShell\v1.0\Powershell.exe" -Argument $arg 
+        $A = New-ScheduledTaskAction -Execute $cmd -Argument $arg 
         $T = New-ScheduledTaskTrigger -AtLogOn -RandomDelay 60
         $P = New-ScheduledTaskPrincipal "System" -RunLevel Highest
         #$P = New-ScheduledTaskPrincipal -UserID "NT AUTHORITY\System" -LogonType ServiceAccount -RunLevel Highest
@@ -195,7 +195,7 @@ function Invoke-CreateTask{
         $D = New-ScheduledTask -Action $A -Principal $P -Trigger $T -Settings $S
   
         Register-ScheduledTask -InputObject $D -TaskName $Taskname -Force -ErrorAction Stop
-        Write-Log "Create Task $Taskname" -Level Info
+        Write-Log "Create Task $Taskname with Action $cmd $arg" -Level Info
     } Catch {
         #$e = $_.Exception.Message;
         #Write-Host "Error: Job creation failed.  Validate user rights."
@@ -346,7 +346,7 @@ if ($Hostname -ne $currentHostname){
 
     if ($executeScript) {
         try {
-
+            Write-Log "Enrollment cmdline: $exePath $arguments" -Level Info
             $process = Start-Process -FilePath $exePath -ArgumentList $arguments -NoNewWindow -Wait -PassThru
             do {start-sleep 60} until ((Get-ItemProperty -Path $EnrollmentRegistryPath -Name $registryValue -ErrorAction SilentlyContinue).Status -eq 'Completed')
             
@@ -354,6 +354,7 @@ if ($Hostname -ne $currentHostname){
                 Write-Log "Enrollment with HUB CLI Completed." -Level Success
             
                 #Remove Task so it doesn't run again
+                Write-Log "Deleting Task EnrolintoWS1.ps1" -Level Info
                 Unregister-ScheduledTask -TaskName "EnrolintoWS1.ps1" -confirm:$false -ErrorAction SilentlyContinue
                 exit 0
             }
@@ -377,7 +378,7 @@ function Invoke-InstallAgent {
 
     try {
         Write-Log "Installing AirwatchAgent" -Level Info
-        $process = Start-Process msiexec.exe -ArgumentList "/i","$destfolder\$agent","/quiet","UI=HEADLESS","PROVISIONHUB=Y","ENABLEBETAFEATURES=Y","DEFERENROLLMENT=Y" -NoNewWindow -Wait -PassThru
+        $process = Start-Process msiexec.exe -ArgumentList "/i","$destfolder\$agent","/quiet","ENABLEBETAFEATURES=Y","DEFERENROLLMENT=Y" -NoNewWindow -Wait -PassThru
         
         if ($process.ExitCode -eq 0) {
             Write-Log "Hub Install Completed." -Level Success
@@ -399,20 +400,6 @@ function Main {
     #Setup Logging
     Test-Folder -Path $destfolder
     Write-Log "Setup_EnrolintoWS1.ps1 Started" -Level Success
-
-    #Ask for WS1 tenant and staging credentials if not already provided
-    <# if ([string]::IsNullOrEmpty($ServerName)){
-        $ServerName = Read-Host -Prompt 'Enter the Workspace ONE UEM Device Services Server URL'
-        $GroupID = Read-Host -Prompt 'Enter the Organizational Group ID'
-        $UserName = Read-Host -Prompt 'Enter the Staging Username'
-        $Password = Read-Host -Prompt 'Enter the Staging User Password'
-    } #>
-<#     Write-Log "Workspace ONE environment details obtained" -Level Info
-
-    #Test for blank passord as...
-    if ([string]::IsNullOrEmpty($Password)){
-        $password = "."
-    } #>
 
     #Create EnrolintoWS1.ps1 Script that does enrolment, triggered on first logon by Scheduled Task called EnrolintoWS1.ps1
     $FileName = "$destfolder\EnrollintoWS1.ps1"
