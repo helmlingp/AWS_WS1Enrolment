@@ -310,6 +310,7 @@ function Write-Log {
 #Variables
 $currentHostname=[System.Net.Dns]::GetHostName()
 $HubRegistryMainPath = "HKLM:\SOFTWARE\AIRWATCH"
+$awmdmstring = Get-ItemProperty -Path $HubRegistryMainPath -Name "awmdm" -ErrorAction SilentlyContinue
 $EnrollmentRegistryPath = "$($HubRegistryMainPath)\EnrollmentStatus"
 $installDir = (Get-ItemProperty -Path $HubRegistryMainPath -Name "INSTALLDIR" -ErrorAction SilentlyContinue).INSTALLDIR
 $exePath = "$installDir\AgentUI\AWProcessCommands.exe"
@@ -318,6 +319,7 @@ $osType = (Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVe
 $executeScript = $false
 
 Write-Log "Starting EnrolintoWS1 Process" -Level Success
+
 #Do not run this script in base image VM
 if ($Hostname -ne $currentHostname){
     
@@ -329,6 +331,14 @@ if ($Hostname -ne $currentHostname){
             Write-Log "Registry path $EnrollmentRegistryPath does not exist. Triggering HUB CLI." -Level Warn
             $executeScript = $true
         } else {
+            # test for existence of awmdm regkey and delete if exists. Should be resolved in new version of HubW
+            if ($null -eq $awmdmstring) {
+                #write-host "no awmdm key"
+            } else {
+                Write-Log "Removing $HubRegistryMainPath\awmdm key as this causes overrite of devices from Golden Master" -Level Warn
+                Remove-ItemProperty -Path $HubRegistryMainPath -Name "awmdm" -Force -ErrorAction SilentlyContinue
+            }
+
             $status = (Get-ItemProperty -Path $EnrollmentRegistryPath -Name "Status" -ErrorAction SilentlyContinue).Status
             if ($osType -eq "Server" -and $status -ne "Completed") {
                 Write-Log "Server Not Enrolled. Triggering HUB CLI."
