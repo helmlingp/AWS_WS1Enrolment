@@ -1,34 +1,34 @@
 <#
 .Synopsis
-    The Setup_EnrolintoWS1.ps1 script optioinally downloads the latest AirwatchAgent.msi, installs the AirwatchAgent.msi 
-    without enrollment credentials, creates a script (EnrolintoWS1.ps1) locally and creates a Windows Scheduled Task 
-    that executes script on first logon, passing Workspace ONE environment and staging user credentials as parameters
-    to enrol a Persistent VDI Desktop into Workspace ONE.
+    The Setup_EnrolintoWS1.ps1 script prepares a Windows machine for enrollment into Workspace ONE UEM (WS1) on first logon.
  .NOTES
     Created:   	    October 2022
-    Updated:        June 2025
+    Updated:        July 2025
     Created by:	    Phil Helmling
     Organization:   Omnissa, LLC
     Filename:       Setup_EnrolintoWS1.ps1
     GitHub:         https://github.com/helmlingp/AWS_WS1Enrolment
 .DESCRIPTION
-    The Setup_EnrolintoWS1.ps1 script optioinally downloads the latest AirwatchAgent.msi, installs the AirwatchAgent.msi 
-    without enrollment credentials, creates a script (EnrolintoWS1.ps1) locally and creates a Windows Scheduled Task 
-    that executes script on first logon, passing Workspace ONE environment and staging user credentials as parameters
-    to enrol a Persistent VDI Desktop into Workspace ONE.
+    The Setup_EnrolintoWS1.ps1 script optionally downloads the latest AirwatchAgent.msi, installs the AirwatchAgent.msi 
+    without enrollment credentials in deferred enrollment mode, creates a script (EnrolintoWS1.ps1) locally and creates
+    a Windows Scheduled Task that executes script on first logon, passing Workspace ONE environment and staging user 
+    credentials as parameters to enrol a Persistent VDI Desktop into Workspace ONE.
 
     The Setup_EnrolintoWS1.ps1 script should be run on the Base AWS AMI VM when used to create AWS Workspace VMs, or within the 
-    Azure Base Image when used to create Horizon Cloud on Azure pools.
+    Azure Base Image when used to create Horizon Cloud on Azure pools. This script can also be run on a Windows 10/11 VMs used as 
+    the Golden Master for Horizon 8 deployments.
 
-    Requires Intelligent Hub for Windows 2505 or above as this uses the new DEFERENROLLMENT=Y parameter.
+    The EnrolintoWS1.ps1 script will be executed by a Windows Scheduled Task on first logon of the user.
+
+    Requires Intelligent Hub for Windows 2505 build 8965 or newer as this uses the new DEFERENROLLMENT=Y parameter.
 
     ** Note: **
-    - Silent enrolment requires AAD P1 license and "Airwatch by VMware" MDM app configured for AAD joined machines or ADDS 
+    - Silent enrollment of EntraID joined machines requires AAD P1 license and "Airwatch by VMware" MDM app configured for AAD joined machines or ADDS 
     (on-premises) domain joined machines. HUB will prompt for credentials with all other configurations.
     - Downloads the latest AirWatchAgent.msi to %WINDIR%\Setup\Scripts folder using -Download switch. AirwatchAgent.msi can also be 
     downloaded manually from https://getwsone.com or to utilise the same version seeded into the console goto 
     https://<DS_FQDN>/agents/ProtectionAgent_AutoSeed/AirwatchAgent.msi to download it, substituting <DS_FQDN> with the FQDN for the 
-    Device Services Server.
+    Device Services Server. Place the AirwatchAgent.msi in the same folder as the Setup_EnrolintoWS1.ps1 script.
 
 .DISCLAIMER    
     THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
@@ -39,8 +39,8 @@
     CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
     
 .REQUIREMENTS
-    - AirWatchAgent.msi in the %WINDIR%\Setup\Scripts folder or in the current folder or use the -Download switch
-    - WS1 enrollment credentials and server details
+    - AirWatchAgent.msi in the same folder as the Setup_EnrolintoWS1.ps1 script or use the -Download switch
+    - WS1 enrollment credentials, Device Servcies server details and Organization Group Name (OGName)
     - Run on AWS base AMI VM used to create AWS Workspace or Azure Base Image used to create a HCoA Pool
 
 .USAGE
@@ -195,7 +195,7 @@ function Invoke-CreateTask{
         $D = New-ScheduledTask -Action $A -Principal $P -Trigger $T -Settings $S
   
         Register-ScheduledTask -InputObject $D -TaskName $Taskname -Force -ErrorAction Stop
-        Write-Log "Create Task $Taskname with Action $cmd $arg" -Level Info
+        Write-Log "Create Task $Taskname with Action: $cmd $arg" -Level Info
     } Catch {
         #$e = $_.Exception.Message;
         #Write-Host "Error: Job creation failed.  Validate user rights."
@@ -211,7 +211,7 @@ function Build-EnrollScript {
     Enrolls a persistent VDI desktop or AWS Workspaces "desktop" into WS1
 .NOTES
     Created:   	    November 2021
-    Updated:        April 2025
+    Updated:        July 2025
     Created by:	    Phil Helmling
     Organization:   Omnissa, LLC
     Filename:       EnrollintoWS1.ps1
@@ -309,6 +309,7 @@ function Write-Log {
 
 #Variables
 $currentHostname=[System.Net.Dns]::GetHostName()
+
 $HubRegistryMainPath = "HKLM:\SOFTWARE\AIRWATCH"
 $awmdmstring = Get-ItemProperty -Path $HubRegistryMainPath -Name "awmdm" -ErrorAction SilentlyContinue
 $EnrollmentRegistryPath = "$($HubRegistryMainPath)\EnrollmentStatus"
@@ -322,37 +323,54 @@ Write-Log "Starting EnrolintoWS1 Process" -Level Success
 
 #Do not run this script in base image VM
 if ($Hostname -ne $currentHostname){
-    
-    #Check if HUBW installed
-    if ($null -eq $installDir) {
-        Write-Log "INSTALLDIR not found in registry. Script execution aborted." -Level Error
-    } else {
-        if (!(Test-Path -Path $EnrollmentRegistryPath)) {
-            Write-Log "Registry path $EnrollmentRegistryPath does not exist. Triggering HUB CLI." -Level Warn
-            $executeScript = $true
-        } else {
-            # test for existence of awmdm regkey and delete if exists. Should be resolved in new version of HubW
-            if ($null -eq $awmdmstring) {
-                #write-host "no awmdm key"
-            } else {
-                Write-Log "Removing $HubRegistryMainPath\awmdm key as this causes overrite of devices from Golden Master" -Level Warn
-                Remove-ItemProperty -Path $HubRegistryMainPath -Name "awmdm" -Force -ErrorAction SilentlyContinue
-            }
-
-            $status = (Get-ItemProperty -Path $EnrollmentRegistryPath -Name "Status" -ErrorAction SilentlyContinue).Status
-            if ($osType -eq "Server" -and $status -ne "Completed") {
-                Write-Log "Server Not Enrolled. Triggering HUB CLI."
-                $executeScript = $true
-            } elseif ($status -eq "InProgress" -or $status -eq "Completed") {
-                Write-Log "Enrollment skipped as EnrollmentStatus is '$status'." -Level Warn
-                #exit 1
-            } else {
-                Write-Log "EnrollmentStatus is '$status'. Triggering HUB CLI."
-                $executeScript = $true
-            }
-        }
+    #Check if current user is local Administrator
+    Write-Log "Not running of Golden Image: $Hostname." -Level Info
+    try {
+        $domainName = [System.DirectoryServices.ActiveDirectory.Domain]::GetComputerDomain().Name
+        Write-Log "AD-joined domain name: $domainName" -Level Info
+		$currentUser = [Security.Principal.WindowsIdentity]::GetCurrent().Name.Replace("$domainName\", "")
+    } catch {
+        $domainName = $null
+        Write-Log "This computer is not joined to an AD domain." -Level Warn
+		$currentUser = [Security.Principal.WindowsIdentity]::GetCurrent().Name.Replace("$currentHostname\", "")
     }
     
+    #Only run enrollment in not the local Administrator user
+    if ($currentUser -notlike "*Administrator*") {
+        Write-Log "Current user is $currentUser. Continuing enrollment." -Level Info
+    
+        #Check if HUBW installed
+        if ($null -eq $installDir) {
+            Write-Log "INSTALLDIR not found in registry. Script execution aborted." -Level Error
+        } else {
+            if (!(Test-Path -Path $EnrollmentRegistryPath)) {
+                Write-Log "Registry path $EnrollmentRegistryPath does not exist. Triggering HUB CLI." -Level Warn
+                $executeScript = $true
+            } else {
+                # test for existence of awmdm regkey and delete if exists. Should be resolved in new version of HubW
+                if ($null -eq $awmdmstring) {
+                    #write-host "no awmdm key"
+                } else {
+                    Write-Log "Removing $HubRegistryMainPath\awmdm key as this causes overrite of devices from Golden Master" -Level Warn
+                    Remove-ItemProperty -Path $HubRegistryMainPath -Name "awmdm" -Force -ErrorAction SilentlyContinue
+                }
+
+                $status = (Get-ItemProperty -Path $EnrollmentRegistryPath -Name "Status" -ErrorAction SilentlyContinue).Status
+                if ($osType -eq "Server" -and $status -ne "Completed") {
+                    Write-Log "Server Not Enrolled. Triggering HUB CLI."
+                    $executeScript = $true
+                } elseif ($status -eq "InProgress" -or $status -eq "Completed") {
+                    Write-Log "Enrollment skipped as EnrollmentStatus is '$status'." -Level Warn
+                    #exit 1
+                } else {
+                    Write-Log "EnrollmentStatus is '$status'. Triggering HUB CLI."
+                    $executeScript = $true
+                }
+            }
+        }
+    } else {
+        Write-Log "Current user is $currentUser. Exiting enrollment." -Level Error
+    }
 
     if ($executeScript) {
         try {
@@ -377,9 +395,9 @@ if ($Hostname -ne $currentHostname){
             Write-Log "Error: Script encountered an error: $_" -Level Error
         }
     }
-
+} else {
+    Write-Log "Running on Golden Image machine $currentHostname. Exiting Enrollment." -Level Info
 }
-
 '@
     return $EnrollintoWS1
 }
@@ -410,13 +428,13 @@ function Main {
     #Setup Logging
     Test-Folder -Path $destfolder
     Write-Log "Setup_EnrolintoWS1.ps1 Started" -Level Success
-
+    $currentUser = [Security.Principal.WindowsIdentity]::GetCurrent().Name
     #Create EnrolintoWS1.ps1 Script that does enrolment, triggered on first logon by Scheduled Task called EnrolintoWS1.ps1
     $FileName = "$destfolder\EnrollintoWS1.ps1"
     $EnrollintoWS1 = Build-EnrollScript
     If (Test-Path -Path $FileName){Remove-Item $FileName -force;Write-Log "removed existing EnrollintoWS1.ps1" -Level Warn}
     New-Item -Path $destfolder -ItemType "file" -Name "EnrollintoWS1.ps1" -Value $EnrollintoWS1 -Force -Confirm:$false
-    Write-Log "create new EnrollintoWS1.ps1" -Level Info
+    Write-Log "Running in base image VM logged on as $currentUser. Creating EnrollintoWS1.ps1 script." -Level Info
 
     #Download latest AirwatchAgent.msi
     if($Download){
